@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "catdog-classifier"
+version = "0.1.0"
+description = ""
+authors = ["Nikita Kosheelev <koshelev.nd@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.9,<4.0"
+relaynet-pytorch = "^1.1"
+numpy1 = "^0.0.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
