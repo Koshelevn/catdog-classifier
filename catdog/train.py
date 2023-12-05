@@ -3,9 +3,9 @@ import time
 import numpy as np
 import torch
 import torch.nn as nn
-from data.data_loaders import train_dataset, val_dataset
 from models.cnn import model_cnn
 from sklearn.metrics import f1_score
+from utils.data_loaders import train_dataset, val_dataset
 
 
 NUM_WORKERS = 4
