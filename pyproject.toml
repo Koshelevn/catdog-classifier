@@ -19,7 +19,7 @@ scikit-image = "^0.22.0"
 importlib-metadata = "4.13.0"
 dvc = "^3.30.3"
 dvc-gdrive = "^2.20.0"
-
+markdown = "3.3.5"
 
 [build-system]
 requires = ["poetry-core"]
