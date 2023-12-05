@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import torchvision
@@ -22,7 +21,7 @@ transformer = transforms.Compose(
     ]
 )
 
-print(os.curdir)
+
 train_dataset = torchvision.datasets.ImageFolder(
     str(DATA_PATH / "train_11k"), transform=transformer
 )
