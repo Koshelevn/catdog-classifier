@@ -1,0 +1,22 @@
+model:
+    name: cnn
+    embedding_size: 128
+    train:
+      batch: 256
+      workers: 4
+      learning_rate: 0.001
+      epoch: 10
+    filename: cnn.ckpt
+data:
+  paths:
+    folder: ${hydra:runtime.cwd}/catdog/data
+    train: train_11k
+    val: val
+    test: test_labeled
+  size_height: 96
+  size_width: 96
+  image_mean: [0.485, 0.456, 0.406]
+  image_std: [0.229, 0.224, 0.225]
+  model_dir: ${hydra:runtime.cwd}/catdog/trained_models
+infer:
+  file: ${hydra:runtime.cwd}/img.jpg

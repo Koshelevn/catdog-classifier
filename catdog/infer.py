@@ -1,3 +1,6 @@
+from pathlib import Path
+
+import hydra
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -5,30 +8,31 @@ from skimage.io import imread
 from skimage.transform import resize
 
 
-with open("cnn.ckpt", "rb") as file:
-    model = torch.load(file)
-
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
-SIZE_H = SIZE_W = 96
-image_mean = [0.485, 0.456, 0.406]
-image_std = [0.229, 0.224, 0.225]
 
-
-def infer_model(model, img_path):
+@hydra.main(config_path="config", config_name="conf", version_base="1.1")
+def infer_model(cfg):
     """Run model on selected image"""
 
-    src = imread(img_path)
+    model_dir = Path(cfg.data.model_dir)
+    with open(model_dir / cfg.model.filename, "rb") as file:
+        model = torch.load(file)
 
-    resized = resize(src, (SIZE_H, SIZE_W), mode="reflect")
+    src = imread(cfg.infer.file)
+
+    resized = resize(src, (cfg.data.size_height, cfg.data.size_width), mode="reflect")
     # convert to torch.Tensor
     tensor = torch.Tensor(
-        np.transpose((resized / 255 - image_mean) / image_std, [2, 0, 1])[
-            np.newaxis, :, :, :
-        ]
+        np.transpose(
+            (resized / 255 - cfg.data.image_mean) / cfg.data.image_std, [2, 0, 1]
+        )[np.newaxis, :, :, :]
     ).to(device)
-
-    print(F.softmax(model(tensor), 1))
+    model.eval()
     score_cat = F.softmax(model(tensor), 1)[0][0].detach().cpu().numpy()
     score_dog = F.softmax(model(tensor), 1)[0][1].detach().cpu().numpy()
-    return score_cat, score_dog
+    print(f"cat score: {score_cat}\ndog score: {score_dog}")
+
+
+if __name__ == "__main__":
+    infer_model()
