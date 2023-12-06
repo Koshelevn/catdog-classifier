@@ -1,16 +1,15 @@
+import os
 import time
+from pathlib import Path
 
+import hydra
 import numpy as np
 import torch
 import torch.nn as nn
-from models.cnn import model_cnn
+from models.cnn import ModelCNN
 from sklearn.metrics import f1_score
-from utils.data_loaders import train_dataset, val_dataset
+from utils.data_loaders import get_datasets
 
-
-NUM_WORKERS = 4
-BATCH_SIZE = 256
-EPOCH_NUM = 30
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -114,17 +113,17 @@ def train_model(
     train_batch_generator,
     val_batch_generator,
     opt,
-    ckpt_name=None,
-    n_epochs=EPOCH_NUM,
+    model_folder,
+    ckpt_name,
+    n_epochs,
 ):
     """
     Run training: forward/backward pass using batch_generators.
     Log performance using loss monitoring and score distribution plots for validation set.
     """
 
-    train_loss, val_loss = [], [1]
-    val_loss_idx = [0]
     top_val_accuracy = 0
+    model_folder = Path(model_folder)
 
     for epoch in range(n_epochs):
         start_time = time.time()
@@ -142,17 +141,9 @@ def train_model(
             batch_loss.backward()
             opt.step()
 
-            # log train loss
-            train_loss.append(batch_loss.detach().cpu().numpy())
-
         # Evaluation phase
         metric_results = test_model(model, loss, val_batch_generator, subset_name="val")
         metric_results = get_score_distributions(metric_results)
-
-        # Logging
-        val_loss_value = np.mean(metric_results["loss"])
-        val_loss_idx.append(len(train_loss))
-        val_loss.append(val_loss_value)
 
         print(
             "Epoch {} of {} took {:.3f}s".format(
@@ -162,33 +153,54 @@ def train_model(
         val_accuracy_value = metric_results["accuracy"]
         if val_accuracy_value > top_val_accuracy and ckpt_name is not None:
             top_val_accuracy = val_accuracy_value
-
+            if not os.path.exists(model_folder):
+                os.mkdir(model_folder)
             # save checkpoint of the best model
-            with open(ckpt_name, "wb") as f:
+            with open(model_folder / ckpt_name, "wb") as f:
                 torch.save(model, f)
     print(f"Accuracy for saved model: {top_val_accuracy}")
     return model
 
 
-def train_and_save_model(model, model_name):
+@hydra.main(config_path="config", config_name="conf", version_base="1.1")
+def train_and_save_model(cfg):
     """Train chosen model and save it"""
 
+    train_dataset, val_dataset, _ = get_datasets(
+        cfg.data.paths.folder,
+        cfg.data.paths.train,
+        cfg.data.paths.val,
+        cfg.data.paths.test,
+        cfg.data.size_height,
+        cfg.data.size_width,
+        cfg.data.image_mean,
+        cfg.data.image_std,
+    )
     train_batch_gen = torch.utils.data.DataLoader(
-        train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS
+        train_dataset,
+        batch_size=cfg.model.train.batch,
+        shuffle=True,
+        num_workers=cfg.model.train.workers,
     )
     val_batch_gen = torch.utils.data.DataLoader(
-        val_dataset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS
+        val_dataset, batch_size=cfg.model.train.batch, num_workers=cfg.model.train.workers
     )
-
-    opt = torch.optim.Adam(model.parameters(), lr=1e-3)
+    model = ModelCNN(cfg.model.embedding_size).get_model()
+    opt = torch.optim.Adam(model.parameters(), lr=cfg.model.train.learning_rate)
     opt.zero_grad()
-    ckpt_name = model_name
     model = model.to(device)
     loss = nn.CrossEntropyLoss()
     train_model(
-        model, loss, train_batch_gen, val_batch_gen, opt, ckpt_name=ckpt_name, n_epochs=10
+        model,
+        loss,
+        train_batch_gen,
+        val_batch_gen,
+        opt,
+        model_folder=cfg.data.model_dir,
+        ckpt_name=cfg.model.filename,
+        n_epochs=cfg.model.train.epoch,
     )
 
 
 if __name__ == "__main__":
-    train_and_save_model(model_cnn, "cnn.ckpt")
+    train_and_save_model()
