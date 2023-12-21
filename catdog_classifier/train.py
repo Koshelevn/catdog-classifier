@@ -7,11 +7,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 from models.cnn import ModelCNN
-from sklearn.metrics import f1_score
 from utils.data_loaders import get_datasets
+from utils.dvc_helpers import dvc_pull
 
-
-device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+from catdog_classifier.test.test import test_model
 
 
 def compute_loss(model, loss, data_batch):
@@ -23,37 +22,6 @@ def compute_loss(model, loss, data_batch):
     logits = model(img_batch)
 
     return loss(logits, label_batch), model
-
-
-def accuracy(scores, labels, threshold=0.5):
-    predicted = np.array(scores > threshold).astype(np.int32)
-    return np.mean(predicted == labels)
-
-
-def f1(scores, labels, threshold=0.5):
-    predicted = np.array(scores > threshold).astype(np.int32)
-    return f1_score(labels, predicted)
-
-
-# you may add other metrics if you wish
-tracked_metrics = {"accuracy": accuracy, "f1-score": f1}
-
-
-def calculate_metrics(scores, labels, print_log=False):
-    """Compute all the metrics from tracked_metrics dict using scores and labels."""
-
-    scores_array = np.array(scores).astype(np.float32)
-    labels_array = np.array(labels)
-
-    metric_results = {}
-    for k, v in tracked_metrics.items():
-        metric_value = v(scores_array, labels_array)
-        metric_results[k] = metric_value
-
-    if print_log:
-        print(" | ".join(["{}: {:.4f}".format(k, v) for k, v in metric_results.items()]))
-
-    return metric_results
 
 
 def get_score_distributions(epoch_result_dict):
@@ -68,43 +36,6 @@ def get_score_distributions(epoch_result_dict):
         ]
 
     return epoch_result_dict
-
-
-@torch.no_grad()  # we do not need to save gradients on evaluation
-def test_model(model, loss, batch_generator, subset_name="test", print_log=True):
-    """Evaluate the model using data from batch_generator and metrics defined above."""
-
-    # disable dropout / use averages for batch_norm
-    model.train(False)
-
-    # save scores, labels and loss values for performance logging
-    score_list = []
-    label_list = []
-    loss_list = []
-
-    for X_batch, y_batch in batch_generator:
-        # do the forward pass
-        logits = model(X_batch.to(device))
-        _, scores = torch.max(logits.cpu().data, 1)
-        labels = y_batch.numpy().tolist()
-
-        # compute loss value
-        batch_loss = loss(logits, y_batch.to(device))
-
-        # save the necessary data
-        loss_list.append(batch_loss.detach().cpu().numpy().tolist())
-        score_list.extend(scores)
-        label_list.extend(labels)
-
-    if print_log:
-        print("Results on {} set | ".format(subset_name), end="")
-
-    metric_results = calculate_metrics(score_list, label_list, print_log)
-    metric_results["scores"] = score_list
-    metric_results["labels"] = label_list
-    metric_results["loss"] = loss_list
-
-    return metric_results
 
 
 def train_model(
@@ -128,20 +59,19 @@ def train_model(
     for epoch in range(n_epochs):
         start_time = time.time()
 
-        # Train phase
-        model.train(True)  # enable dropout / batch_norm training behavior
+        model.train(True)
         for (X_batch, y_batch) in train_batch_generator:
-            # move data to target device
-            X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+
+            X_batch, y_batch = X_batch.to(torch.device("cpu")), y_batch.to(
+                torch.device("cpu")
+            )
             data_batch = {"img": X_batch, "label": y_batch}
             batch_loss, model = compute_loss(model, loss, data_batch)
 
-            # compute backward pass
             opt.zero_grad()
             batch_loss.backward()
             opt.step()
 
-        # Evaluation phase
         metric_results = test_model(model, loss, val_batch_generator, subset_name="val")
         metric_results = get_score_distributions(metric_results)
 
@@ -155,7 +85,7 @@ def train_model(
             top_val_accuracy = val_accuracy_value
             if not os.path.exists(model_folder):
                 os.mkdir(model_folder)
-            # save checkpoint of the best model
+
             with open(model_folder / ckpt_name, "wb") as f:
                 torch.save(model, f)
     print(f"Accuracy for saved model: {top_val_accuracy}")
@@ -165,6 +95,8 @@ def train_model(
 @hydra.main(config_path="config", config_name="conf", version_base="1.1")
 def train_and_save_model(cfg):
     """Train chosen model and save it"""
+
+    dvc_pull(cfg.data.paths.folder)
 
     train_dataset, val_dataset, _ = get_datasets(
         cfg.data.paths.folder,
@@ -188,7 +120,7 @@ def train_and_save_model(cfg):
     model = ModelCNN(cfg.model.embedding_size).get_model()
     opt = torch.optim.Adam(model.parameters(), lr=cfg.model.train.learning_rate)
     opt.zero_grad()
-    model = model.to(device)
+    model = model.to(torch.device("cpu"))
     loss = nn.CrossEntropyLoss()
     train_model(
         model,

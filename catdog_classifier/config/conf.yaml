@@ -5,11 +5,11 @@ model:
       batch: 256
       workers: 4
       learning_rate: 0.001
-      epoch: 10
+      epoch: 3
     filename: cnn.ckpt
 data:
   paths:
-    folder: ${hydra:runtime.cwd}/catdog/data
+    folder: ${hydra:runtime.cwd}/catdog_classifier/data
     train: train_11k
     val: val
     test: test_labeled
@@ -17,6 +17,4 @@ data:
   size_width: 96
   image_mean: [0.485, 0.456, 0.406]
   image_std: [0.229, 0.224, 0.225]
-  model_dir: ${hydra:runtime.cwd}/catdog/trained_models
-infer:
-  file: ${hydra:runtime.cwd}/img.jpg
+  model_dir: ${hydra:runtime.cwd}/catdog_classifier/trained_models
