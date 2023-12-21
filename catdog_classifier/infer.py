@@ -1,36 +1,55 @@
 from pathlib import Path
 
 import hydra
-import numpy as np
+import pandas as pd
 import torch
-import torch.nn.functional as F
-from skimage.io import imread
-from skimage.transform import resize
+import torch.nn as nn
+from utils.data_loaders import get_datasets
 from utils.dvc_helpers import dvc_pull
+
+from catdog_classifier.test.test import test_model
 
 
 @hydra.main(config_path="config", config_name="conf", version_base="1.1")
 def infer_model(cfg):
-    """Run model on selected image"""
+    """Run model on test dataset"""
 
     dvc_pull(cfg.data.model_dir)
 
+    _, _, test_dataset = get_datasets(
+        cfg.data.paths.folder,
+        cfg.data.paths.train,
+        cfg.data.paths.val,
+        cfg.data.paths.test,
+        cfg.data.size_height,
+        cfg.data.size_width,
+        cfg.data.image_mean,
+        cfg.data.image_std,
+    )
+    test_batch_gen = torch.utils.data.DataLoader(
+        test_dataset,
+        batch_size=cfg.model.train.batch,
+        num_workers=cfg.model.train.workers,
+    )
+
     model_dir = Path(cfg.data.model_dir)
+
+    loss = nn.CrossEntropyLoss()
     with open(model_dir / cfg.model.filename, "rb") as file:
         model = torch.load(file)
 
-    src = imread(cfg.infer.file)
-    resized = resize(src, (cfg.data.size_height, cfg.data.size_width), mode="reflect")
-
-    tensor = torch.Tensor(
-        np.transpose(
-            (resized / 255 - cfg.data.image_mean) / cfg.data.image_std, [2, 0, 1]
-        )[np.newaxis, :, :, :]
-    ).to(torch.device("cpu"))
-    model.eval()
-    score_cat = F.softmax(model(tensor), 1)[0][0].detach().cpu().numpy()
-    score_dog = F.softmax(model(tensor), 1)[0][1].detach().cpu().numpy()
-    print(f"cat score: {score_cat}\ndog score: {score_dog}")
+    metric_results = test_model(model, loss, test_batch_gen, subset_name="test")
+    files = list(map(lambda x: x[0].split("/")[-1], test_dataset.imgs))
+    result_df = pd.DataFrame(
+        {
+            "filename": files,
+            "predict": metric_results.get("labels"),
+            "category": metric_results.get("labels"),
+        }
+    )
+    result_df.category.replace({0: "cat", 1: "dog"}, inplace=True)
+    path = Path(cfg.data.inference_result)
+    result_df.to_csv(path, index=False)
 
 
 if __name__ == "__main__":
