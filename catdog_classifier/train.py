@@ -2,6 +2,7 @@ import os
 import time
 from pathlib import Path
 
+import git
 import hydra
 import mlflow
 import numpy as np
@@ -89,6 +90,8 @@ def train_model(
         mlflow.log_metric("val_f1", metric_results["f1-score"])
         mlflow.log_metric("train_accuracy", metric_train["accuracy"])
         mlflow.log_metric("train_f1", metric_train["f1-score"])
+        #  TODO more metrics
+
         if val_accuracy_value > top_val_accuracy and ckpt_name is not None:
             top_val_accuracy = val_accuracy_value
             if not os.path.exists(model_folder):
@@ -96,7 +99,6 @@ def train_model(
 
             with open(model_folder / ckpt_name, "wb") as f:
                 torch.save(model, f)
-    print(f"Accuracy for saved model: {top_val_accuracy}")
     return model
 
 
@@ -133,7 +135,11 @@ def train_and_save_model(cfg):
 
     mlflow.set_tracking_uri("file://" + utils.get_original_cwd() + "/mlruns")
     experiment_id = get_experiment("catdog_train")
-    with mlflow.start_run(experiment_id=experiment_id):
+    with mlflow.start_run(
+        experiment_id=experiment_id,
+        run_name=git.Repo(search_parent_directories=True).head.object.hexsha,
+    ):
+        # TODO log hyperparameters to mlflow
         train_model(
             model,
             loss,
