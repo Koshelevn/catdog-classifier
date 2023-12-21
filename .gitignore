@@ -160,3 +160,6 @@ cython_debug/
 .idea/
 
 outputs/
+
+mlruns/
+mlruns.db
