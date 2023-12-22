@@ -14,6 +14,7 @@ from catdog_classifier.test.test import test_model
 def infer_model(cfg):
     """Run model on test dataset"""
 
+    dvc_pull(cfg.data.paths.folder)
     dvc_pull(cfg.data.model_dir)
 
     _, _, test_dataset = get_datasets(
