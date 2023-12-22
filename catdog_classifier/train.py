@@ -90,7 +90,6 @@ def train_model(
         mlflow.log_metric("val_f1", metric_results["f1-score"])
         mlflow.log_metric("train_accuracy", metric_train["accuracy"])
         mlflow.log_metric("train_f1", metric_train["f1-score"])
-        #  TODO more metrics
 
         if val_accuracy_value > top_val_accuracy and ckpt_name is not None:
             top_val_accuracy = val_accuracy_value
@@ -139,7 +138,10 @@ def train_and_save_model(cfg):
         experiment_id=experiment_id,
         run_name=git.Repo(search_parent_directories=True).head.object.hexsha,
     ):
-        # TODO log hyperparameters to mlflow
+        mlflow.log_param("embedding_size", cfg.model.embedding_size)
+        mlflow.log_param("batch_size", cfg.model.train.batch)
+        mlflow.log_param("lr", cfg.model.train.learning_rate)
+        mlflow.log_param("epoch", cfg.model.train.epoch)
         train_model(
             model,
             loss,
