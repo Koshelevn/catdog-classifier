@@ -20,11 +20,11 @@ def calculate_metrics(scores, labels, print_log=False):
     tracked_metrics = {"accuracy": accuracy, "f1-score": f1}
 
     metric_results = {}
-    for k, v in tracked_metrics.items():
-        metric_value = v(scores_array, labels_array)
-        metric_results[k] = metric_value
+    for key, value in tracked_metrics.items():
+        metric_value = value(scores_array, labels_array)
+        metric_results[key] = metric_value
 
     if print_log:
-        print(" | ".join(["{}: {:.4f}".format(k, v) for k, v in metric_results.items()]))
+        print(" | ".join(["{}: {:.4f}".format(key, value) for key, value in metric_results.items()]))
 
     return metric_results
